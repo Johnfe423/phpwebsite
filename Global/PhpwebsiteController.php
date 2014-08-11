@@ -19,6 +19,7 @@ class PhpwebsiteController implements Controller {
     // This is a temporary thing to prevent Layout from running in the event of
     // a JSON request or otherwise non-HTML response.
     private $skipLayout = false;
+    private $response;
 
     /**
      * Current requested module
@@ -43,18 +44,18 @@ class PhpwebsiteController implements Controller {
                 throw new Exception('Unknown branch called');
             }
 
+            $this->beforeRun($request);
             $this->runTime($request);
 
             $module = $this->determineCurrentModule($request);
             if ($module) {
-                $this->beforeRun($request, $this);
-                $response = $module->execute($request->getNextRequest());
-                $this->renderResponse($request, $response);
-                $this->afterRun($request, $response);
-                if ($response instanceof \Http\RedirectResponse) {
-                    $response->forward();
+                $this->response = $module->execute($request->getNextRequest());
+                $this->renderResponse($request);
+                if ($this->response instanceof \Http\RedirectResponse) {
+                    $this->response->forward();
                 }
             }
+            $this->afterRun($request);
         } catch (Http\Exception $e) {
             $this->renderResponse($request, $e->getResponse());
         } catch (Exception $e) {
@@ -106,20 +107,20 @@ class PhpwebsiteController implements Controller {
         return $module;
     }
 
-    private function renderResponse(\Request $request, \Response $response)
+    private function renderResponse(\Request $request)
     {
         // Temporary until proper error pages are fully implemented
         // @todo customizable, editable error pages that don't dump a bunch of
         // stack if it's not needed or if debug is disabled
-        if ($response instanceof \Html\NotFoundResponse) {
+        if ($this->response instanceof \Html\NotFoundResponse) {
             Error::errorPage(404);
         }
 
-        if ($response instanceof \Http\RedirectResponse) {
+        if ($this->response instanceof \Http\RedirectResponse) {
             return;
         }
 
-        $view = $response->getView();
+        $view = $this->response->getView();
 
         // For Compatibility only - modules that make an end-run around the new
         // system and speak to Layout directly should return a Response
@@ -151,20 +152,33 @@ class PhpwebsiteController implements Controller {
         foreach (ModuleRepository::getInstance()->getActiveModules() as $mod) {
             // This is a temporary thing to prevent Layout from running in the
             // event of a JSON request or otherwise non-HTML Response.
-            if ($this->skipLayout && strtolower($mod->getTitle()) == 'layout')
+            if ($this->skipLayout && strtolower($mod->getTitle()) == 'layout') {
                 continue;
+            }
 
             $mod->destruct();
         }
     }
 
-    private function beforeRun(\Request $request, \Controller $controller)
+    /**
+     * Calls every active module object's beforeRun method AFTER the session
+     * declaration. loadModuleInits is run prior to session load.
+     * @param \Request $request
+     * @param \Controller $controller
+     */
+    private function beforeRun(\Request $request)
     {
         foreach (ModuleRepository::getInstance()->getActiveModules() as $mod) {
-            $mod->beforeRun($request, $controller);
+            $mod->beforeRun($request, $this);
         }
     }
 
+    /**
+     * Calls the runTime method before the current module execution, but after
+     * this controller's beforeRun call.
+     *
+     * @param \Request $request
+     */
     private function runTime(\Request $request)
     {
         foreach (ModuleRepository::getInstance()->getActiveModules() as $mod) {
@@ -172,19 +186,25 @@ class PhpwebsiteController implements Controller {
         }
     }
 
-    private function afterRun(\Request $request, \Response &$response)
+    /**
+     * Calls the afterRun method on all active module after the execution of
+     * the current module.
+     * @param \Request $request
+     */
+    private function afterRun(\Request $request)
     {
         foreach (ModuleRepository::getInstance()->getActiveModules() as $mod) {
-            $mod->afterRun($request, $response);
+            $mod->afterRun($request);
         }
     }
 
+    /**
+     * Calls all active modules init() method prior to the session start.
+     */
     private function loadModuleInits()
     {
         foreach (ModuleRepository::getInstance()->getActiveModules() as $mod) {
-            if ($mod->isActive()) {
-                $mod->init();
-            }
+            $mod->init();
         }
     }
 
@@ -206,6 +226,15 @@ class PhpwebsiteController implements Controller {
         $module = new $namespace;
 
         return $module;
+    }
+
+    /**
+     * Returns the current response
+     * @return \Response
+     */
+    public function getResponse()
+    {
+        return $this->response;
     }
 
     public function addModule(Module $module)

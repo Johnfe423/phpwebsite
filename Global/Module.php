@@ -98,14 +98,10 @@ abstract class Module extends Data implements Controller {
      * immediately after the target module is run, override the afterRun function.
      * By default, it does nothing.
      *
-     * You may change the response at this time and access the request for
-     * reference.  The response is passed in by reference, so if you need to,
-     * you can completely replace it with a different Response object.
-     *
      * @see ModuleManager::afterRun()
      * @return void
      */
-    public function afterRun(\Request $request, \Response &$response)
+    public function afterRun(\Request $request)
     {
 
     }
