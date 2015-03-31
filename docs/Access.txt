@@ -218,3 +218,4 @@ http://mysite.com/van-halen-reunion
 Shortcuts are made from the MiniAdmin interface. The administrative
 tab in Access allows you to edit or delete the shortcuts.
 
+This is John's commit!
